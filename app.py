@@ -19,7 +19,14 @@ from src.data_loader import load_rbi_data, load_network_data, get_atm_series, ge
 from src.features import create_features
 from src.models import train_and_evaluate_all
 
-# ---------------------------------------------------------
+
+def resample_monthly(df_subset, agg_dict):
+    """Robust month-end resampling compatible with both pandas >= 2.2 ('ME') and older pandas ('M')."""
+    try:
+        return df_subset.resample("ME").agg(agg_dict)
+    except Exception:
+        return df_subset.resample("M").agg(agg_dict)
+
 # Page Configuration & Modern Styling
 # ---------------------------------------------------------
 st.set_page_config(
@@ -358,8 +365,9 @@ with tabs[0]:
     # Full Year Monthly Overview
     st.markdown("---")
     st.markdown(f"#### 📊 Full Year Overview: All Months in {selected_year}")
+
     mask_year = (df_trans.index.year == selected_year)
-    df_year = df_trans.loc[mask_year].resample("M").agg({
+    df_year = resample_monthly(df_trans.loc[mask_year], {
         "Cash_Withdrawn": "sum",
         "Transaction_Count": "sum"
     })
@@ -367,6 +375,7 @@ with tabs[0]:
     df_year["Avg_Daily_Amount"] = (df_year["Cash_Withdrawn"] / df_year.index.days_in_month).round(2)
     df_year["Avg_Ticket_Size"] = (df_year["Cash_Withdrawn"] / np.maximum(1, df_year["Transaction_Count"])).round(2)
     df_year["MoM_Amount_Growth (%)"] = df_year["Cash_Withdrawn"].pct_change() * 100.0
+
 
     st.dataframe(
         df_year[["Month_Name", "Cash_Withdrawn", "Transaction_Count", "Avg_Daily_Amount", "Avg_Ticket_Size", "MoM_Amount_Growth (%)"]].style.format({
