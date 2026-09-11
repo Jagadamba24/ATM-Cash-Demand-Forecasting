@@ -1,49 +1,28 @@
-# 🏦 ATM Cash Demand Forecasting & Intelligent Replenishment Engine
+# 🏦 ATM Cash Demand Forecasting Using Machine Learning
 
 [![Python 3.7+](https://img.shields.io/badge/Python-3.7+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.23+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.0+-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-An enterprise-grade forecasting and cash logistics optimization system designed for retail banks, Independent ATM Deployers (IADs), and Cash-in-Transit (CIT) operators. This project combines **modern Machine Learning ensembles** with **Operations Research $(s, S)$ inventory control** to forecast daily cash demand and minimize cash replenishment costs.
+An advanced Machine Learning system for predicting daily ATM cash withdrawal demand. This project benchmarks classical econometric models against modern ensemble techniques (Gradient Boosting, Random Forest, SARIMAX, and Hybrid Stacking Ensembles) using calendar, pay-cycle, and autoregressive lag engineering.
 
 ---
 
-## 🌟 What Makes This Project Unique?
+## 📌 Project Overview
 
-In traditional data science coursework, cash demand forecasting stops at raw error metrics like RMSE or MAPE. However, in real banking operations:
-> **Forecasting numbers is only half the battle. The true business value lies in translating predictions into optimal Cash-in-Transit (CIT) logistics decisions.**
+Accurately predicting cash demand in Automated Teller Machines (ATMs) is critical for retail banks and ATM network operators. Cash withdrawal patterns are driven by:
+1. **Weekly Seasonality:** Cyclical patterns between weekdays and weekends.
+2. **Salary & Pension Disbursal Surges:** Significant withdrawal volume spikes during the 1st to 5th of each calendar month.
+3. **Autoregressive Momentum:** Short-term persistence where recent withdrawal velocity influences upcoming demand.
 
-This system bridges that gap with two integrated engines:
-1. **Predictive Engine:** Multi-horizon Machine Learning forecasting (Gradient Boosting, Random Forest, SARIMAX, and Hybrid Stacking Ensembles) using calendar, pay-cycle, and autoregressive lag engineering.
-2. **Prescriptive Engine:** An **Intelligent Dynamic $(s, S)$ Replenishment Policy** that minimizes cash holding costs and CIT armored van trips while maintaining a 99%+ customer non-stockout service level.
-
----
-
-## 📐 Mathematical Formulation
-
-### 1. Operations Research: Dynamic $(s, S)$ Inventory Control
-For day $t$ with lead time $L$ (typically 1 day for armored van dispatch):
-- **Safety Stock ($SS_t$):** Sized dynamically based on forecast residual uncertainty:
-  $$SS_t = Z \cdot \sigma_e \cdot \sqrt{L}$$
-  where $Z = 2.33$ for a 99% non-stockout service level, and $\sigma_e$ is the standard deviation of model residuals.
-- **Dynamic Reorder Threshold ($s_t$):**
-  $$s_t = \hat{d}_{t+1} + SS_t$$
-  A replenishment order is triggered if closing cash inventory $I_t < s_t$.
-- **Order-Up-To Target ($S$):** Cash is restored to full ATM capacity $C$.
-
-### 2. Total Cash Management Cost Objective Function
-$$\min \text{Total Cost} = C_{\text{holding}} + C_{\text{logistics}} + C_{\text{stockout}}$$
-$$\text{Total Cost} = \sum_{t=1}^T \left( I_t \cdot \frac{r}{365} \right) + (N_{\text{refills}} \cdot C_{\text{CIT}}) + \sum_{t=1}^T \left( \max(0, d_t - I_t) \cdot P_{\text{stockout}} \right)$$
-- $r$: Annual cost of capital / holding rate (default: 7.0%).
-- $C_{\text{CIT}}$: Cost per armored transit trip (default: ₹2,500).
-- $P_{\text{stockout}}$: Regulatory SLA and customer dissatisfaction penalty per unit of unmet cash.
+This project provides an end-to-end Machine Learning pipeline, an interactive **Streamlit** web application, and a benchmarked suite of forecasting models.
 
 ---
 
 ## 📊 Benchmark Model Performance
 
-Evaluated on the **Reserve Bank of India (RBI)** out-of-sample holdout test horizon:
+Evaluated on the **Reserve Bank of India (RBI)** out-of-sample holdout test window:
 
 | Model | Architecture | RMSE | MAE | WAPE (%) | $R^2$ Score | Directional Accuracy |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -54,11 +33,7 @@ Evaluated on the **Reserve Bank of India (RBI)** out-of-sample holdout test hori
 | **Gradient Boosting** | 100 Trees (Hist / GBM) | 602.02 | 470.29 | 12.67% | -2.23 | 69.2% |
 | **Seasonal Naive (Baseline)** | 7-Day Persistent Lag | 654.55 | 564.56 | 15.21% | -2.82 | 46.2% |
 
-### 💰 Financial Cost Savings Impact
-Backtested on the simulated fleet network:
-- **Traditional Fixed Calendar Schedule (Mon/Fri):** ₹14,596.49 total cost (4 trips, high idle cash).
-- **ML Dynamic $(s, S)$ Replenishment Policy:** ₹8,934.82 total cost (2 trips, zero stockouts).
-- **Net Operational Savings:** **₹5,661.67 per ATM every 14 days (38.8% Cost Reduction)**.
+> **Key Takeaway:** The Hybrid Stacking Ensemble achieves a single-digit **Weighted Absolute Percentage Error (WAPE: 9.67%)**, accurately predicting both weekday peaks and weekend troughs.
 
 ---
 
@@ -66,20 +41,23 @@ Backtested on the simulated fleet network:
 
 ```
 ATM-Cash-Demand-Forecasting/
-├── app.py                      # Modern Streamlit interactive web dashboard
+├── app.py                      # Modern Streamlit interactive forecasting dashboard
 ├── Rbi.ipynb                   # End-to-end data science notebook following Google ML best practices
-├── requirements.txt            # Dependency specification
+├── requirements.txt            # Cross-platform dependencies
+├── render.yaml                 # 1-Click Render.com deployment Blueprint
+├── Procfile                    # Web service process definition
+├── runtime.txt                 # Python runtime specification (3.10.13)
+├── .streamlit/config.toml      # Streamlit production server settings
 ├── data/
 │   ├── RBI.csv                 # Clean Reserve Bank of India daily benchmark dataset (121 days)
 │   ├── RBI.xlsx                # Excel version of RBI dataset
-│   └── multi_atm_network.csv   # Multi-ATM fleet simulation across 5 distinct archetypes (1,830 rows)
+│   └── multi_atm_network.csv   # Multi-ATM dataset across 5 distinct archetypes (1,830 rows)
 └── src/
     ├── __init__.py             # Package initializer
     ├── data_loader.py          # Robust loader with frequency alignment & validation
     ├── features.py             # Calendar cyclical, salary spike (1st-5th), and shifted rolling features
     ├── models.py               # Comprehensive forecasting suite with recursive multi-step forecasting
-    ├── optimizer.py            # Operations research dynamic (s, S) cash replenishment engine
-    └── evaluation.py           # Statistical metrics (RMSE, WAPE) & financial inventory cost accounting
+    └── evaluation.py           # Statistical error metrics (RMSE, MAE, MAPE, WAPE, R2)
 ```
 
 ---
@@ -112,23 +90,25 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
-*The dashboard will automatically open at `http://localhost:8501` featuring Fleet Command KPIs, Model Arena, Replenishment Optimizer, and Stress Testing.*
+Open **`http://localhost:8501`** in your browser.
 
-### 5. Run the Story-Driven Jupyter Notebook
-Open `Rbi.ipynb` in your preferred Jupyter environment (VS Code, JupyterLab, or Google Colab). All cells execute from top to bottom with zero external missing file dependencies.
+### 5. Run the Jupyter Notebook
+Open `Rbi.ipynb` in VS Code or JupyterLab and run all cells end-to-end.
 
 ---
 
-## 🏙️ Heterogeneous ATM Fleet Archetypes
+## 🌐 Deploy to Render.com
 
-The included `multi_atm_network.csv` simulates 5 distinct real-world banking environments:
-1. **Commercial Tech Park (`ATM_01`):** Heavy weekday demand, sharp 1st–5th salary rush (+75%), muted weekends.
-2. **Shopping Mall (`ATM_02`):** Massive weekend & festival spikes (+80%), moderate weekdays.
-3. **Residential Suburb (`ATM_03`):** Consistent withdrawals, pension/utility cycle at month-start.
-4. **Airport / Transit Terminal (`ATM_04`):** High velocity 24/7 withdrawals with high volatility.
-5. **University Campus (`ATM_05`):** Semester cycles and academic term fluctuations.
+This repository is pre-configured for **1-click deployment on Render**:
+1. Push your repository to GitHub.
+2. Log in to [Render Dashboard](https://dashboard.render.com/) and click **New +** ➔ **Web Service**.
+3. Select your repository: `Jagadamba24/ATM-Cash-Demand-Forecasting`.
+4. Render will automatically detect `render.yaml` and configure:
+   - **Build Command:** `pip install --upgrade pip && pip install -r requirements.txt`
+   - **Start Command:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false`
+5. Click **Create Web Service**.
 
 ---
 
 ## 📜 License
-This project is released under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
