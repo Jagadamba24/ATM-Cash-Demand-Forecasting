@@ -22,6 +22,8 @@ from src.models import train_and_evaluate_all
 
 def resample_monthly(df_subset, agg_dict):
     """Robust month-end resampling compatible with both pandas >= 2.2 ('ME') and older pandas ('M')."""
+    if len(df_subset) == 0:
+        return pd.DataFrame(columns=list(agg_dict.keys()))
     try:
         return df_subset.resample("ME").agg(agg_dict)
     except Exception:
@@ -384,7 +386,7 @@ with tabs[0]:
             "Avg_Daily_Amount": f"{curr_symbol}" + "{:,.2f}",
             "Avg_Ticket_Size": f"{curr_symbol}" + "{:,.2f}",
             "MoM_Amount_Growth (%)": "{:+.1f}%"
-        }),
+        }, na_rep="—"),
         use_container_width=True
     )
 
