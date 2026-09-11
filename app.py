@@ -1,7 +1,7 @@
 """
-ATM Cash Demand Forecasting Using Machine Learning
-An enterprise-grade forecasting dashboard for predictive cash analytics,
-day-by-day and monthly transaction analysis, multi-model benchmarking, and scenario simulation.
+ATM Cash Demand & Transaction Forecasting Dashboard
+A modern, enterprise-grade system for daily and monthly transaction forecasting,
+with dedicated Year & Month exploration (e.g., January 2015).
 """
 
 import os
@@ -47,13 +47,13 @@ st.markdown("""
         background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 28px 36px;
-        margin-bottom: 24px;
+        padding: 26px 34px;
+        margin-bottom: 22px;
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(12px);
     }
     .hero-title {
-        font-size: 2.2rem;
+        font-size: 2.1rem;
         font-weight: 800;
         background: linear-gradient(90deg, #60A5FA, #A78BFA, #F472B6);
         -webkit-background-clip: text;
@@ -61,7 +61,7 @@ st.markdown("""
         margin-bottom: 6px;
     }
     .hero-subtitle {
-        font-size: 1.05rem;
+        font-size: 1.0rem;
         color: #94A3B8;
         font-weight: 400;
         line-height: 1.5;
@@ -71,7 +71,7 @@ st.markdown("""
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 16px;
-        margin-bottom: 24px;
+        margin-bottom: 22px;
     }
     .kpi-card {
         background: rgba(30, 41, 59, 0.5);
@@ -126,42 +126,16 @@ st.markdown("""
 # ---------------------------------------------------------
 # Sidebar Controls
 # ---------------------------------------------------------
-st.sidebar.markdown("### ⚙️ Forecasting Configuration")
+st.sidebar.markdown("### ⚙️ Dataset & Location")
 
 data_source = st.sidebar.radio(
     "Data Source Mode",
-    ["RBI National Benchmark (Daily)", "Multi-ATM Network Fleet"],
-    index=1
+    ["Multi-ATM Network Fleet (2015-2020)", "RBI National Daily Aggregate (2015-2020)"],
+    index=0
 )
 
 # Load Data based on selection
-if data_source == "RBI National Benchmark (Daily)":
-    try:
-        df_full = load_rbi_data()
-        active_series = df_full["Value"]
-        atm_name = "RBI National Daily Aggregate"
-        location_type = "Nationwide Aggregate (Bank ATM Network)"
-        is_aggregate = True
-        
-        # Synthesize realistic transaction metrics for aggregate dataset
-        # In India, typical ATM withdrawal ticket size is ~Rs 3,200
-        avg_ticket_benchmark = 3200.0
-        txns_series = (active_series / avg_ticket_benchmark).round().astype(int)
-        ticket_series = (active_series / np.maximum(1, txns_series)).round(2)
-        
-        df_trans = pd.DataFrame({
-            "Cash_Withdrawn": active_series,
-            "Transaction_Count": txns_series,
-            "Avg_Ticket_Size": ticket_series,
-            "Is_Weekend": (active_series.index.dayofweek >= 5).astype(int),
-            "Is_Salary_Day": ((active_series.index.day >= 1) & (active_series.index.day <= 5)).astype(int),
-            "Holiday_Flag": [0] * len(active_series)
-        }, index=active_series.index)
-        
-    except Exception as e:
-        st.error(f"Error loading RBI dataset: {e}")
-        st.stop()
-else:
+if "Multi-ATM" in data_source:
     try:
         df_network = load_network_data()
         atm_list = df_network["ATM_Name"].unique().tolist()
@@ -179,6 +153,30 @@ else:
         is_aggregate = False
     except Exception as e:
         st.error(f"Error loading Network dataset: {e}")
+        st.stop()
+else:
+    try:
+        df_full = load_rbi_data()
+        active_series = df_full["Value"]
+        atm_name = "RBI National Daily Aggregate"
+        location_type = "Nationwide Aggregate (Bank ATM Network)"
+        is_aggregate = True
+        
+        # Benchmark transaction sizing
+        avg_ticket_benchmark = 3200.0
+        txns_series = (active_series / avg_ticket_benchmark).round().astype(int)
+        ticket_series = (active_series / np.maximum(1, txns_series)).round(2)
+        
+        df_trans = pd.DataFrame({
+            "Cash_Withdrawn": active_series,
+            "Transaction_Count": txns_series,
+            "Avg_Ticket_Size": ticket_series,
+            "Is_Weekend": (active_series.index.dayofweek >= 5).astype(int),
+            "Is_Salary_Day": ((active_series.index.day >= 1) & (active_series.index.day <= 5)).astype(int),
+            "Holiday_Flag": [0] * len(active_series)
+        }, index=active_series.index)
+    except Exception as e:
+        st.error(f"Error loading RBI dataset: {e}")
         st.stop()
 
 # Forecasting parameters
@@ -199,8 +197,8 @@ st.markdown(f"""
 <div class="hero-banner">
     <div class="hero-title">ATM Cash Demand & Transaction Forecasting</div>
     <div class="hero-subtitle">
-        Comprehensive daily and monthly analytics for cash withdrawal amounts and transaction volumes,
-        powered by Machine Learning forecasting models.
+        Analyze and forecast day-by-day and monthly cash amounts and transaction frequencies
+        across multi-year history (2015 to 2020).
         <br>Active Target: <b style="color: #60A5FA;">{atm_name}</b> ({location_type})
     </div>
 </div>
@@ -210,8 +208,8 @@ st.markdown(f"""
 # Main Tabs Navigation
 # ---------------------------------------------------------
 tabs = st.tabs([
-    "📅 Day-by-Day & Monthly Analytics",
-    "📊 Historical Demand & Seasonality",
+    "📅 Monthly & Day-by-Day Explorer",
+    "📊 Multi-Year Demand & Seasonality",
     "🤖 ML Forecasting Arena",
     "🔮 Multi-Horizon Demand Predictions",
     "🌪️ Demand Surge & Scenario Simulator",
@@ -219,196 +217,173 @@ tabs = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# TAB 1: Day-by-Day & Monthly Analytics (New Dedicated Tab)
+# TAB 1: Monthly & Day-by-Day Explorer (Year & Month Selector)
 # ---------------------------------------------------------
 with tabs[0]:
-    st.markdown("### 📅 Monthly & Day-by-Day Amount & Transaction Analytics")
-    st.write("Inspect detailed cash withdrawal amounts, transaction counts, and ticket sizes at both aggregate monthly and granular day-by-day frequencies.")
+    st.markdown("### 📅 Monthly & Day-by-Day Amount and Transaction Explorer")
+    st.write("Select any **Year and Month** (e.g. **January 2015**) to explore full day-by-day cash amounts, transaction counts, ticket sizes, and monthly comparisons.")
 
-    granularity = st.radio("Select Analytics Granularity", ["Monthly Aggregates", "Day-by-Day Granular Breakdown"], horizontal=True)
-
-    if granularity == "Monthly Aggregates":
-        st.markdown("#### 📆 Monthly Cash Amount & Transaction Summary")
+    # Year & Month Filter Controls
+    col_ym1, col_ym2 = st.columns(2)
+    
+    available_years = sorted(df_trans.index.year.unique().tolist())
+    with col_ym1:
+        # Default to 2015 as specifically requested by user
+        default_year_idx = available_years.index(2015) if 2015 in available_years else 0
+        selected_year = st.selectbox("🗓️ Select Year", available_years, index=default_year_idx)
         
-        # Aggregate by Month
-        df_monthly = df_trans.resample("M").agg({
-            "Cash_Withdrawn": "sum",
-            "Transaction_Count": "sum"
-        })
-        df_monthly["Month_Name"] = df_monthly.index.strftime("%B %Y")
-        df_monthly["Avg_Daily_Amount"] = (df_monthly["Cash_Withdrawn"] / df_monthly.index.days_in_month).round(2)
-        df_monthly["Avg_Daily_Txns"] = (df_monthly["Transaction_Count"] / df_monthly.index.days_in_month).round(1)
-        df_monthly["Avg_Ticket_Size"] = (df_monthly["Cash_Withdrawn"] / np.maximum(1, df_monthly["Transaction_Count"])).round(2)
-        
-        # Month-over-Month (MoM) Growth
-        df_monthly["MoM_Amount_Growth (%)"] = df_monthly["Cash_Withdrawn"].pct_change() * 100.0
-        df_monthly["MoM_Txn_Growth (%)"] = df_monthly["Transaction_Count"].pct_change() * 100.0
+    available_months = [
+        ("January", 1), ("February", 2), ("March", 3), ("April", 4),
+        ("May", 5), ("June", 6), ("July", 7), ("August", 8),
+        ("September", 9), ("October", 10), ("November", 11), ("December", 12)
+    ]
+    with col_ym2:
+        # Default to January as requested
+        selected_month_name = st.selectbox("📆 Select Month", [m[0] for m in available_months], index=0)
+        selected_month_num = dict(available_months)[selected_month_name]
 
-        # Monthly KPI Cards
-        tot_cash_m = df_monthly["Cash_Withdrawn"].sum()
-        tot_txns_m = df_monthly["Transaction_Count"].sum()
-        overall_avg_ticket = tot_cash_m / max(1, tot_txns_m)
-        num_months = len(df_monthly)
+    # Filter data for the chosen Year and Month
+    mask_month = (df_trans.index.year == selected_year) & (df_trans.index.month == selected_month_num)
+    df_selected_month = df_trans.loc[mask_month].copy()
 
+    if len(df_selected_month) == 0:
+        st.warning(f"No records available for {selected_month_name} {selected_year}.")
+    else:
+        # Month Metrics Summary
+        m_tot_cash = df_selected_month["Cash_Withdrawn"].sum()
+        m_tot_txns = df_selected_month["Transaction_Count"].sum()
+        m_avg_daily = df_selected_month["Cash_Withdrawn"].mean()
+        m_avg_ticket = m_tot_cash / max(1, m_tot_txns)
+        m_days = len(df_selected_month)
+
+        st.markdown(f"#### 📌 Summary for {selected_month_name} {selected_year} ({m_days} Days)")
         st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
-                <div class="kpi-label">Total Cash Disbursed</div>
-                <div class="kpi-value">{curr_symbol}{tot_cash_m:,.0f}</div>
-                <span class="kpi-badge-neutral">{num_months} Months Total</span>
+                <div class="kpi-label">Monthly Total Cash Amount</div>
+                <div class="kpi-value">{curr_symbol}{m_tot_cash:,.0f}</div>
+                <span class="kpi-badge-neutral">{selected_month_name} {selected_year}</span>
             </div>
             <div class="kpi-card">
-                <div class="kpi-label">Total Transactions</div>
-                <div class="kpi-value">{tot_txns_m:,.0f}</div>
+                <div class="kpi-label">Monthly Total Transactions</div>
+                <div class="kpi-value">{m_tot_txns:,.0f}</div>
                 <span class="kpi-badge-positive">Withdrawal Transactions</span>
             </div>
             <div class="kpi-card">
-                <div class="kpi-label">Monthly Average Cash</div>
-                <div class="kpi-value">{curr_symbol}{(tot_cash_m / num_months):,.0f}</div>
-                <span class="kpi-badge-neutral">Per Month</span>
+                <div class="kpi-label">Average Daily Amount</div>
+                <div class="kpi-value">{curr_symbol}{m_avg_daily:,.0f}</div>
+                <span class="kpi-badge-neutral">Per Day</span>
             </div>
             <div class="kpi-card">
-                <div class="kpi-label">Overall Average Ticket Size</div>
-                <div class="kpi-value">{curr_symbol}{overall_avg_ticket:,.0f}</div>
+                <div class="kpi-label">Average Ticket Size</div>
+                <div class="kpi-value">{curr_symbol}{m_avg_ticket:,.0f}</div>
                 <span class="kpi-badge-positive">Per Transaction</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Monthly Dual-Axis Chart (Bar for Amount, Line for Transactions)
-        fig_m, ax_m1 = plt.subplots(figsize=(14, 5.2), facecolor='#111827')
-        ax_m1.set_facecolor('#0B0F19')
-        
-        months_labels = df_monthly["Month_Name"].tolist()
-        x_indices = np.arange(len(months_labels))
-        width = 0.45
+        # Day-by-Day Dual-Axis Plot for the Selected Month
+        st.markdown(f"#### 📈 Day-by-Day Trajectory: {selected_month_name} 1, {selected_year} to {selected_month_name} {m_days}, {selected_year}")
+        fig_dm, ax_dm1 = plt.subplots(figsize=(14, 5.0), facecolor='#111827')
+        ax_dm1.set_facecolor('#0B0F19')
 
-        bars = ax_m1.bar(x_indices, df_monthly["Cash_Withdrawn"], width=width, color='#3B82F6', alpha=0.85, edgecolor='#60A5FA', label=f'Monthly Cash Amount ({unit_label})')
-        ax_m1.set_ylabel(f'Monthly Cash Amount ({unit_label})', color='#60A5FA', fontsize=11, fontweight='bold')
-        ax_m1.set_xticks(x_indices)
-        ax_m1.set_xticklabels(months_labels, color='#94A3B8', fontsize=10)
-        ax_m1.tick_params(axis='y', colors='#60A5FA')
-        
-        # Secondary Y Axis for Transactions
-        ax_m2 = ax_m1.twinx()
-        ax_m2.plot(x_indices, df_monthly["Transaction_Count"], color='#F43F5E', linewidth=2.8, marker='o', markersize=7, label='Monthly Transaction Count')
-        ax_m2.set_ylabel('Transaction Count (#)', color='#F43F5E', fontsize=11, fontweight='bold')
-        ax_m2.tick_params(axis='y', colors='#F43F5E')
-        
-        for spine in ax_m1.spines.values():
+        days_x = df_selected_month.index
+        ax_dm1.plot(days_x, df_selected_month["Cash_Withdrawn"], color='#3B82F6', linewidth=2.2, marker='o', label=f'Daily Cash Amount ({unit_label})')
+        ax_dm1.fill_between(days_x, df_selected_month["Cash_Withdrawn"], color='#3B82F6', alpha=0.15)
+        ax_dm1.set_ylabel(f'Daily Cash Amount ({unit_label})', color='#60A5FA', fontsize=11, fontweight='bold')
+        ax_dm1.tick_params(axis='y', colors='#60A5FA')
+        ax_dm1.tick_params(axis='x', colors='#94A3B8')
+        ax_dm1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+
+        # Secondary axis for transactions
+        ax_dm2 = ax_dm1.twinx()
+        ax_dm2.plot(days_x, df_selected_month["Transaction_Count"], color='#F43F5E', linewidth=1.8, linestyle='--', marker='s', markersize=4, label='Daily Transaction Count (#)')
+        ax_dm2.set_ylabel('Transaction Count (#)', color='#F43F5E', fontsize=11, fontweight='bold')
+        ax_dm2.tick_params(axis='y', colors='#F43F5E')
+
+        for spine in ax_dm1.spines.values():
             spine.set_color('#1F2937')
-        for spine in ax_m2.spines.values():
+        for spine in ax_dm2.spines.values():
             spine.set_color('#1F2937')
-        ax_m1.grid(True, color='#1F2937', linestyle=':')
-        
-        # Combine legends
-        lines1, labels1 = ax_m1.get_legend_handles_labels()
-        lines2, labels2 = ax_m2.get_legend_handles_labels()
-        ax_m1.legend(lines1 + lines2, labels1 + labels2, facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC', loc='upper left')
+        ax_dm1.grid(True, color='#1F2937', linestyle=':')
+
+        lines1, labels1 = ax_dm1.get_legend_handles_labels()
+        lines2, labels2 = ax_dm2.get_legend_handles_labels()
+        ax_dm1.legend(lines1 + lines2, labels1 + labels2, facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC', loc='upper right')
         plt.tight_layout()
-        st.pyplot(fig_m)
-        plt.close(fig_m)
+        st.pyplot(fig_dm)
+        plt.close(fig_dm)
 
-        # Monthly Table
-        st.markdown("#### 📋 Month-over-Month (MoM) Financial & Transaction Ledger")
+        # Day-by-Day Table for Selected Month
+        st.markdown(f"#### 📋 Day-by-Day Transaction Ledger ({selected_month_name} {selected_year})")
+        
+        day_categories = []
+        for idx_d, row_d in df_selected_month.iterrows():
+            if row_d.get("Holiday_Flag", 0) == 1:
+                day_categories.append(f"🎉 Holiday ({row_d.get('Holiday_Name', 'Public Holiday')})")
+            elif row_d.get("Is_Salary_Day", 0) == 1:
+                day_categories.append("💰 Salary Rush (1st-5th)")
+            elif row_d.get("Is_Weekend", 0) == 1:
+                day_categories.append("🏖️ Weekend")
+            else:
+                day_categories.append("🏢 Regular Weekday")
+
+        df_month_display = pd.DataFrame({
+            "Date": df_selected_month.index.strftime('%Y-%m-%d'),
+            "Day of Week": df_selected_month.index.strftime('%A'),
+            "Cash Amount": df_selected_month["Cash_Withdrawn"].values,
+            "Transactions": df_selected_month["Transaction_Count"].values,
+            "Avg Ticket Size": (df_selected_month["Cash_Withdrawn"] / np.maximum(1, df_selected_month["Transaction_Count"])).values,
+            "Day Category": day_categories
+        })
+
         st.dataframe(
-            df_monthly[[
-                "Month_Name", "Cash_Withdrawn", "Transaction_Count", 
-                "Avg_Daily_Amount", "Avg_Daily_Txns", "Avg_Ticket_Size", 
-                "MoM_Amount_Growth (%)", "MoM_Txn_Growth (%)"
-            ]].style.format({
-                "Cash_Withdrawn": f"{curr_symbol}" + "{:,.0f}",
-                "Transaction_Count": "{:,.0f}",
-                "Avg_Daily_Amount": f"{curr_symbol}" + "{:,.2f}",
-                "Avg_Daily_Txns": "{:,.1f}",
-                "Avg_Ticket_Size": f"{curr_symbol}" + "{:,.2f}",
-                "MoM_Amount_Growth (%)": "{:+.1f}%",
-                "MoM_Txn_Growth (%)": "{:+.1f}%"
+            df_month_display.style.format({
+                "Cash Amount": f"{curr_symbol}" + "{:,.2f}",
+                "Transactions": "{:,.0f}",
+                "Avg Ticket Size": f"{curr_symbol}" + "{:,.2f}"
             }),
             use_container_width=True
         )
 
-    else:
-        st.markdown("#### 📆 Day-by-Day Granular Amount & Transaction Logs")
-        
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            start_date_filter = st.date_input("Filter From Date", df_trans.index.min().date())
-        with col_d2:
-            end_date_filter = st.date_input("Filter To Date", df_trans.index.max().date())
+        # Download CSV for this specific month
+        csv_month = df_month_display.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            f"📥 Download {selected_month_name} {selected_year} Day-by-Day Data (CSV)",
+            data=csv_month,
+            file_name=f"{atm_name}_{selected_month_name}_{selected_year}_daily.csv",
+            mime="text/csv"
+        )
 
-        # Slice DataFrame
-        mask = (df_trans.index.date >= start_date_filter) & (df_trans.index.date <= end_date_filter)
-        df_daily_view = df_trans.loc[mask].copy()
+    # Full Year Monthly Overview
+    st.markdown("---")
+    st.markdown(f"#### 📊 Full Year Overview: All Months in {selected_year}")
+    mask_year = (df_trans.index.year == selected_year)
+    df_year = df_trans.loc[mask_year].resample("M").agg({
+        "Cash_Withdrawn": "sum",
+        "Transaction_Count": "sum"
+    })
+    df_year["Month_Name"] = df_year.index.strftime("%B")
+    df_year["Avg_Daily_Amount"] = (df_year["Cash_Withdrawn"] / df_year.index.days_in_month).round(2)
+    df_year["Avg_Ticket_Size"] = (df_year["Cash_Withdrawn"] / np.maximum(1, df_year["Transaction_Count"])).round(2)
+    df_year["MoM_Amount_Growth (%)"] = df_year["Cash_Withdrawn"].pct_change() * 100.0
 
-        if len(df_daily_view) == 0:
-            st.warning("No records found for the selected date range.")
-        else:
-            # Day-by-Day Dual-Axis Plot
-            fig_d, ax_d1 = plt.subplots(figsize=(14, 5.0), facecolor='#111827')
-            ax_d1.set_facecolor('#0B0F19')
-
-            ax_d1.plot(df_daily_view.index, df_daily_view["Cash_Withdrawn"], color='#3B82F6', linewidth=2.0, label=f'Daily Cash Amount ({unit_label})')
-            ax_d1.fill_between(df_daily_view.index, df_daily_view["Cash_Withdrawn"], color='#3B82F6', alpha=0.12)
-            ax_d1.set_ylabel(f'Daily Cash Amount ({unit_label})', color='#60A5FA', fontsize=11, fontweight='bold')
-            ax_d1.tick_params(axis='y', colors='#60A5FA')
-            ax_d1.tick_params(axis='x', colors='#94A3B8')
-            ax_d1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
-
-            ax_d2 = ax_d1.twinx()
-            ax_d2.plot(df_daily_view.index, df_daily_view["Transaction_Count"], color='#F59E0B', linewidth=1.8, linestyle='--', label='Daily Transaction Count')
-            ax_d2.set_ylabel('Transaction Count (#)', color='#F59E0B', fontsize=11, fontweight='bold')
-            ax_d2.tick_params(axis='y', colors='#F59E0B')
-
-            for spine in ax_d1.spines.values():
-                spine.set_color('#1F2937')
-            for spine in ax_d2.spines.values():
-                spine.set_color('#1F2937')
-            ax_d1.grid(True, color='#1F2937', linestyle=':')
-
-            lines1, labels1 = ax_d1.get_legend_handles_labels()
-            lines2, labels2 = ax_d2.get_legend_handles_labels()
-            ax_d1.legend(lines1 + lines2, labels1 + labels2, facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC', loc='upper right')
-            plt.tight_layout()
-            st.pyplot(fig_d)
-            plt.close(fig_d)
-
-            # Day-by-Day Interactive Table
-            df_display = pd.DataFrame({
-                "Date": df_daily_view.index.strftime('%Y-%m-%d'),
-                "Day of Week": df_daily_view.index.strftime('%A'),
-                "Cash Amount": df_daily_view["Cash_Withdrawn"].values,
-                "Transactions": df_daily_view["Transaction_Count"].values,
-                "Avg Ticket Size": (df_daily_view["Cash_Withdrawn"] / np.maximum(1, df_daily_view["Transaction_Count"])).values,
-                "Day Category": [
-                    "💰 Salary Rush" if s else ("🏖️ Weekend" if w else "🏢 Regular Weekday")
-                    for s, w in zip(df_daily_view["Is_Salary_Day"], df_daily_view["Is_Weekend"])
-                ]
-            })
-
-            st.dataframe(
-                df_display.style.format({
-                    "Cash Amount": f"{curr_symbol}" + "{:,.2f}",
-                    "Transactions": "{:,.0f}",
-                    "Avg Ticket Size": f"{curr_symbol}" + "{:,.2f}"
-                }),
-                use_container_width=True
-            )
-
-            # Download CSV option
-            csv_export = df_display.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "📥 Download Day-by-Day Transaction Data (CSV)",
-                data=csv_export,
-                file_name=f"{atm_name}_daily_transactions.csv",
-                mime="text/csv"
-            )
+    st.dataframe(
+        df_year[["Month_Name", "Cash_Withdrawn", "Transaction_Count", "Avg_Daily_Amount", "Avg_Ticket_Size", "MoM_Amount_Growth (%)"]].style.format({
+            "Cash_Withdrawn": f"{curr_symbol}" + "{:,.0f}",
+            "Transaction_Count": "{:,.0f}",
+            "Avg_Daily_Amount": f"{curr_symbol}" + "{:,.2f}",
+            "Avg_Ticket_Size": f"{curr_symbol}" + "{:,.2f}",
+            "MoM_Amount_Growth (%)": "{:+.1f}%"
+        }),
+        use_container_width=True
+    )
 
 # ---------------------------------------------------------
-# TAB 2: Historical Demand & Seasonality
+# TAB 2: Multi-Year Demand & Seasonality
 # ---------------------------------------------------------
 with tabs[1]:
-    st.markdown("### 📊 Historical Cash Demand Trajectory & Seasonality")
+    st.markdown("### 📊 Multi-Year Historical Trajectory (2015 to 2020)")
     
     total_vol = active_series.sum()
     mean_daily = active_series.mean()
@@ -418,9 +393,9 @@ with tabs[1]:
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
-            <div class="kpi-label">Total Cash Disbursed</div>
+            <div class="kpi-label">Total Cash Disbursed (2015-2020)</div>
             <div class="kpi-value">{curr_symbol}{total_vol:,.0f}</div>
-            <span class="kpi-badge-neutral">Historical Dataset</span>
+            <span class="kpi-badge-neutral">{len(active_series):,} Days Total</span>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Average Daily Demand</div>
@@ -428,14 +403,14 @@ with tabs[1]:
             <span class="kpi-badge-positive">Daily Velocity</span>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Peak Daily Volume</div>
+            <div class="kpi-label">Peak Single-Day Surge</div>
             <div class="kpi-value">{curr_symbol}{max_daily:,.0f}</div>
-            <span class="kpi-badge-neutral">Single Day High</span>
+            <span class="kpi-badge-neutral">Maximum Volume</span>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Demand Volatility (CV)</div>
             <div class="kpi-value">{volatility:.1f}%</div>
-            <span class="kpi-badge-positive">Coefficient of Variation</span>
+            <span class="kpi-badge-positive">Predictability Score</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -443,17 +418,16 @@ with tabs[1]:
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.markdown("#### 📅 Daily Withdrawal Demand Over Time")
+        st.markdown("#### 📅 Continuous Demand Trajectory (2015–2020)")
         fig, ax = plt.subplots(figsize=(12, 4.8), facecolor='#111827')
         ax.set_facecolor('#0B0F19')
-        ax.plot(active_series.index, active_series.values, color='#3B82F6', linewidth=2.0, label='Actual Daily Demand')
-        ax.fill_between(active_series.index, active_series.values, color='#3B82F6', alpha=0.15)
+        ax.plot(active_series.index, active_series.values, color='#3B82F6', linewidth=1.2, label='Daily Cash Demand')
         
-        ma7 = active_series.rolling(7).mean()
-        ax.plot(active_series.index, ma7, color='#F59E0B', linewidth=1.5, linestyle='--', label='7-Day Moving Trend')
+        ma30 = active_series.rolling(30).mean()
+        ax.plot(active_series.index, ma30, color='#F59E0B', linewidth=1.8, label='30-Day Moving Average')
         
         ax.tick_params(colors='#94A3B8')
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
         for spine in ax.spines.values():
             spine.set_color('#1F2937')
         ax.grid(True, color='#1F2937', linestyle=':')
@@ -496,7 +470,9 @@ with tabs[2]:
     st.write(f"Benchmarking 6 models evaluated on a strict chronological **{test_horizon}-day holdout test horizon**.")
 
     with st.spinner("Training Machine Learning models and computing forecasts..."):
-        benchmark_results = train_and_evaluate_all(df_full, target_col="Value", test_size=test_horizon)
+        # Use recent 1-year window for high-speed benchmark training
+        df_bench_input = df_full.tail(365) if len(df_full) > 365 else df_full
+        benchmark_results = train_and_evaluate_all(df_bench_input, target_col="Value", test_size=test_horizon)
         df_metrics = benchmark_results["metrics"]
         df_preds = benchmark_results["predictions"]
         y_test = df_preds["Actual"]
