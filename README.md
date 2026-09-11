@@ -11,12 +11,14 @@ An advanced Machine Learning system for predicting daily ATM cash withdrawal dem
 
 ## 📌 Project Overview
 
-Accurately predicting cash demand in Automated Teller Machines (ATMs) is critical for retail banks and ATM network operators. Cash withdrawal patterns are driven by:
-1. **Weekly Seasonality:** Cyclical patterns between weekdays and weekends.
-2. **Salary & Pension Disbursal Surges:** Significant withdrawal volume spikes during the 1st to 5th of each calendar month.
-3. **Autoregressive Momentum:** Short-term persistence where recent withdrawal velocity influences upcoming demand.
+Accurately predicting cash demand and transaction volume in Automated Teller Machines (ATMs) is critical for retail banks and ATM network operators. 
+
+This project models and forecasts ATM dynamics across two core horizons:
+1. **Day-by-Day Granularity:** High-frequency fluctuations, daily withdrawal amounts, transaction counts, average ticket sizes, and salary surges (1st to 5th of each month).
+2. **Monthly Aggregations:** Macro monthly cash volume, monthly transaction counts, Month-over-Month (MoM) growth rates, and seasonal liquidity cycles.
 
 This project provides an end-to-end Machine Learning pipeline, an interactive **Streamlit** web application, and a benchmarked suite of forecasting models.
+
 
 ---
 

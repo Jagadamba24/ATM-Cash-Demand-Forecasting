@@ -1,7 +1,7 @@
 """
 ATM Cash Demand Forecasting Using Machine Learning
 An enterprise-grade forecasting dashboard for predictive cash analytics,
-multi-model benchmarking, and scenario simulation.
+day-by-day and monthly transaction analysis, multi-model benchmarking, and scenario simulation.
 """
 
 import os
@@ -23,7 +23,7 @@ from src.models import train_and_evaluate_all
 # Page Configuration & Modern Styling
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="ATM Cash Demand Forecasting Using ML",
+    page_title="ATM Cash Demand & Transaction Forecasting",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -38,13 +38,11 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
     
-    /* Main Background & Accent Gradients */
     .stApp {
         background: radial-gradient(circle at top right, #111827, #0B0F19 80%);
         color: #F3F4F6;
     }
     
-    /* Hero Header Banner */
     .hero-banner {
         background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -69,7 +67,6 @@ st.markdown("""
         line-height: 1.5;
     }
     
-    /* Modern Glassmorphic KPI Cards */
     .kpi-container {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -134,7 +131,7 @@ st.sidebar.markdown("### ⚙️ Forecasting Configuration")
 data_source = st.sidebar.radio(
     "Data Source Mode",
     ["RBI National Benchmark (Daily)", "Multi-ATM Network Fleet"],
-    index=0
+    index=1
 )
 
 # Load Data based on selection
@@ -145,6 +142,22 @@ if data_source == "RBI National Benchmark (Daily)":
         atm_name = "RBI National Daily Aggregate"
         location_type = "Nationwide Aggregate (Bank ATM Network)"
         is_aggregate = True
+        
+        # Synthesize realistic transaction metrics for aggregate dataset
+        # In India, typical ATM withdrawal ticket size is ~Rs 3,200
+        avg_ticket_benchmark = 3200.0
+        txns_series = (active_series / avg_ticket_benchmark).round().astype(int)
+        ticket_series = (active_series / np.maximum(1, txns_series)).round(2)
+        
+        df_trans = pd.DataFrame({
+            "Cash_Withdrawn": active_series,
+            "Transaction_Count": txns_series,
+            "Avg_Ticket_Size": ticket_series,
+            "Is_Weekend": (active_series.index.dayofweek >= 5).astype(int),
+            "Is_Salary_Day": ((active_series.index.day >= 1) & (active_series.index.day <= 5)).astype(int),
+            "Holiday_Flag": [0] * len(active_series)
+        }, index=active_series.index)
+        
     except Exception as e:
         st.error(f"Error loading RBI dataset: {e}")
         st.stop()
@@ -162,6 +175,7 @@ else:
         df_atm = df_atm.sort_values("Date").set_index("Date")
         active_series = df_atm["Cash_Withdrawn"]
         df_full = pd.DataFrame({"Value": active_series})
+        df_trans = df_atm.copy()
         is_aggregate = False
     except Exception as e:
         st.error(f"Error loading Network dataset: {e}")
@@ -171,19 +185,22 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⏱️ Prediction Horizon")
 test_horizon = st.sidebar.slider("Forecast Horizon (Days)", 7, 30, 14, 1)
-ci_level = st.sidebar.selectbox("Prediction Confidence Interval", ["90%", "95%", "99%"], index=1)
+ci_level = st.sidebar.selectbox("Confidence Interval", ["90%", "95%", "99%"], index=1)
 z_map = {"90%": 1.645, "95%": 1.960, "99%": 2.576}
 z_val = z_map[ci_level]
+
+curr_symbol = "₹" if not is_aggregate else ""
+unit_label = "Cr / Units" if is_aggregate else "INR"
 
 # ---------------------------------------------------------
 # Hero Banner
 # ---------------------------------------------------------
 st.markdown(f"""
 <div class="hero-banner">
-    <div class="hero-title">ATM Cash Demand Forecasting Using ML</div>
+    <div class="hero-title">ATM Cash Demand & Transaction Forecasting</div>
     <div class="hero-subtitle">
-        Predicting daily ATM cash demand using Machine Learning models,
-        dual seasonality analysis, autoregressive lag engineering, and scenario simulations.
+        Comprehensive daily and monthly analytics for cash withdrawal amounts and transaction volumes,
+        powered by Machine Learning forecasting models.
         <br>Active Target: <b style="color: #60A5FA;">{atm_name}</b> ({location_type})
     </div>
 </div>
@@ -193,21 +210,205 @@ st.markdown(f"""
 # Main Tabs Navigation
 # ---------------------------------------------------------
 tabs = st.tabs([
-    "📊 Historical Demand & EDA",
+    "📅 Day-by-Day & Monthly Analytics",
+    "📊 Historical Demand & Seasonality",
     "🤖 ML Forecasting Arena",
     "🔮 Multi-Horizon Demand Predictions",
     "🌪️ Demand Surge & Scenario Simulator",
     "🧠 Feature Importance & Explainability"
 ])
 
-curr_symbol = "₹" if not is_aggregate else ""
-unit_label = "Cr / Units" if is_aggregate else "INR"
-
 # ---------------------------------------------------------
-# TAB 1: Historical Demand & EDA
+# TAB 1: Day-by-Day & Monthly Analytics (New Dedicated Tab)
 # ---------------------------------------------------------
 with tabs[0]:
-    st.markdown("### 📈 Historical Cash Withdrawal Patterns & EDA")
+    st.markdown("### 📅 Monthly & Day-by-Day Amount & Transaction Analytics")
+    st.write("Inspect detailed cash withdrawal amounts, transaction counts, and ticket sizes at both aggregate monthly and granular day-by-day frequencies.")
+
+    granularity = st.radio("Select Analytics Granularity", ["Monthly Aggregates", "Day-by-Day Granular Breakdown"], horizontal=True)
+
+    if granularity == "Monthly Aggregates":
+        st.markdown("#### 📆 Monthly Cash Amount & Transaction Summary")
+        
+        # Aggregate by Month
+        df_monthly = df_trans.resample("M").agg({
+            "Cash_Withdrawn": "sum",
+            "Transaction_Count": "sum"
+        })
+        df_monthly["Month_Name"] = df_monthly.index.strftime("%B %Y")
+        df_monthly["Avg_Daily_Amount"] = (df_monthly["Cash_Withdrawn"] / df_monthly.index.days_in_month).round(2)
+        df_monthly["Avg_Daily_Txns"] = (df_monthly["Transaction_Count"] / df_monthly.index.days_in_month).round(1)
+        df_monthly["Avg_Ticket_Size"] = (df_monthly["Cash_Withdrawn"] / np.maximum(1, df_monthly["Transaction_Count"])).round(2)
+        
+        # Month-over-Month (MoM) Growth
+        df_monthly["MoM_Amount_Growth (%)"] = df_monthly["Cash_Withdrawn"].pct_change() * 100.0
+        df_monthly["MoM_Txn_Growth (%)"] = df_monthly["Transaction_Count"].pct_change() * 100.0
+
+        # Monthly KPI Cards
+        tot_cash_m = df_monthly["Cash_Withdrawn"].sum()
+        tot_txns_m = df_monthly["Transaction_Count"].sum()
+        overall_avg_ticket = tot_cash_m / max(1, tot_txns_m)
+        num_months = len(df_monthly)
+
+        st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div class="kpi-label">Total Cash Disbursed</div>
+                <div class="kpi-value">{curr_symbol}{tot_cash_m:,.0f}</div>
+                <span class="kpi-badge-neutral">{num_months} Months Total</span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Total Transactions</div>
+                <div class="kpi-value">{tot_txns_m:,.0f}</div>
+                <span class="kpi-badge-positive">Withdrawal Transactions</span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Monthly Average Cash</div>
+                <div class="kpi-value">{curr_symbol}{(tot_cash_m / num_months):,.0f}</div>
+                <span class="kpi-badge-neutral">Per Month</span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Overall Average Ticket Size</div>
+                <div class="kpi-value">{curr_symbol}{overall_avg_ticket:,.0f}</div>
+                <span class="kpi-badge-positive">Per Transaction</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Monthly Dual-Axis Chart (Bar for Amount, Line for Transactions)
+        fig_m, ax_m1 = plt.subplots(figsize=(14, 5.2), facecolor='#111827')
+        ax_m1.set_facecolor('#0B0F19')
+        
+        months_labels = df_monthly["Month_Name"].tolist()
+        x_indices = np.arange(len(months_labels))
+        width = 0.45
+
+        bars = ax_m1.bar(x_indices, df_monthly["Cash_Withdrawn"], width=width, color='#3B82F6', alpha=0.85, edgecolor='#60A5FA', label=f'Monthly Cash Amount ({unit_label})')
+        ax_m1.set_ylabel(f'Monthly Cash Amount ({unit_label})', color='#60A5FA', fontsize=11, fontweight='bold')
+        ax_m1.set_xticks(x_indices)
+        ax_m1.set_xticklabels(months_labels, color='#94A3B8', fontsize=10)
+        ax_m1.tick_params(axis='y', colors='#60A5FA')
+        
+        # Secondary Y Axis for Transactions
+        ax_m2 = ax_m1.twinx()
+        ax_m2.plot(x_indices, df_monthly["Transaction_Count"], color='#F43F5E', linewidth=2.8, marker='o', markersize=7, label='Monthly Transaction Count')
+        ax_m2.set_ylabel('Transaction Count (#)', color='#F43F5E', fontsize=11, fontweight='bold')
+        ax_m2.tick_params(axis='y', colors='#F43F5E')
+        
+        for spine in ax_m1.spines.values():
+            spine.set_color('#1F2937')
+        for spine in ax_m2.spines.values():
+            spine.set_color('#1F2937')
+        ax_m1.grid(True, color='#1F2937', linestyle=':')
+        
+        # Combine legends
+        lines1, labels1 = ax_m1.get_legend_handles_labels()
+        lines2, labels2 = ax_m2.get_legend_handles_labels()
+        ax_m1.legend(lines1 + lines2, labels1 + labels2, facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC', loc='upper left')
+        plt.tight_layout()
+        st.pyplot(fig_m)
+        plt.close(fig_m)
+
+        # Monthly Table
+        st.markdown("#### 📋 Month-over-Month (MoM) Financial & Transaction Ledger")
+        st.dataframe(
+            df_monthly[[
+                "Month_Name", "Cash_Withdrawn", "Transaction_Count", 
+                "Avg_Daily_Amount", "Avg_Daily_Txns", "Avg_Ticket_Size", 
+                "MoM_Amount_Growth (%)", "MoM_Txn_Growth (%)"
+            ]].style.format({
+                "Cash_Withdrawn": f"{curr_symbol}" + "{:,.0f}",
+                "Transaction_Count": "{:,.0f}",
+                "Avg_Daily_Amount": f"{curr_symbol}" + "{:,.2f}",
+                "Avg_Daily_Txns": "{:,.1f}",
+                "Avg_Ticket_Size": f"{curr_symbol}" + "{:,.2f}",
+                "MoM_Amount_Growth (%)": "{:+.1f}%",
+                "MoM_Txn_Growth (%)": "{:+.1f}%"
+            }),
+            use_container_width=True
+        )
+
+    else:
+        st.markdown("#### 📆 Day-by-Day Granular Amount & Transaction Logs")
+        
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            start_date_filter = st.date_input("Filter From Date", df_trans.index.min().date())
+        with col_d2:
+            end_date_filter = st.date_input("Filter To Date", df_trans.index.max().date())
+
+        # Slice DataFrame
+        mask = (df_trans.index.date >= start_date_filter) & (df_trans.index.date <= end_date_filter)
+        df_daily_view = df_trans.loc[mask].copy()
+
+        if len(df_daily_view) == 0:
+            st.warning("No records found for the selected date range.")
+        else:
+            # Day-by-Day Dual-Axis Plot
+            fig_d, ax_d1 = plt.subplots(figsize=(14, 5.0), facecolor='#111827')
+            ax_d1.set_facecolor('#0B0F19')
+
+            ax_d1.plot(df_daily_view.index, df_daily_view["Cash_Withdrawn"], color='#3B82F6', linewidth=2.0, label=f'Daily Cash Amount ({unit_label})')
+            ax_d1.fill_between(df_daily_view.index, df_daily_view["Cash_Withdrawn"], color='#3B82F6', alpha=0.12)
+            ax_d1.set_ylabel(f'Daily Cash Amount ({unit_label})', color='#60A5FA', fontsize=11, fontweight='bold')
+            ax_d1.tick_params(axis='y', colors='#60A5FA')
+            ax_d1.tick_params(axis='x', colors='#94A3B8')
+            ax_d1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+
+            ax_d2 = ax_d1.twinx()
+            ax_d2.plot(df_daily_view.index, df_daily_view["Transaction_Count"], color='#F59E0B', linewidth=1.8, linestyle='--', label='Daily Transaction Count')
+            ax_d2.set_ylabel('Transaction Count (#)', color='#F59E0B', fontsize=11, fontweight='bold')
+            ax_d2.tick_params(axis='y', colors='#F59E0B')
+
+            for spine in ax_d1.spines.values():
+                spine.set_color('#1F2937')
+            for spine in ax_d2.spines.values():
+                spine.set_color('#1F2937')
+            ax_d1.grid(True, color='#1F2937', linestyle=':')
+
+            lines1, labels1 = ax_d1.get_legend_handles_labels()
+            lines2, labels2 = ax_d2.get_legend_handles_labels()
+            ax_d1.legend(lines1 + lines2, labels1 + labels2, facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC', loc='upper right')
+            plt.tight_layout()
+            st.pyplot(fig_d)
+            plt.close(fig_d)
+
+            # Day-by-Day Interactive Table
+            df_display = pd.DataFrame({
+                "Date": df_daily_view.index.strftime('%Y-%m-%d'),
+                "Day of Week": df_daily_view.index.strftime('%A'),
+                "Cash Amount": df_daily_view["Cash_Withdrawn"].values,
+                "Transactions": df_daily_view["Transaction_Count"].values,
+                "Avg Ticket Size": (df_daily_view["Cash_Withdrawn"] / np.maximum(1, df_daily_view["Transaction_Count"])).values,
+                "Day Category": [
+                    "💰 Salary Rush" if s else ("🏖️ Weekend" if w else "🏢 Regular Weekday")
+                    for s, w in zip(df_daily_view["Is_Salary_Day"], df_daily_view["Is_Weekend"])
+                ]
+            })
+
+            st.dataframe(
+                df_display.style.format({
+                    "Cash Amount": f"{curr_symbol}" + "{:,.2f}",
+                    "Transactions": "{:,.0f}",
+                    "Avg Ticket Size": f"{curr_symbol}" + "{:,.2f}"
+                }),
+                use_container_width=True
+            )
+
+            # Download CSV option
+            csv_export = df_display.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "📥 Download Day-by-Day Transaction Data (CSV)",
+                data=csv_export,
+                file_name=f"{atm_name}_daily_transactions.csv",
+                mime="text/csv"
+            )
+
+# ---------------------------------------------------------
+# TAB 2: Historical Demand & Seasonality
+# ---------------------------------------------------------
+with tabs[1]:
+    st.markdown("### 📊 Historical Cash Demand Trajectory & Seasonality")
     
     total_vol = active_series.sum()
     mean_daily = active_series.mean()
@@ -217,7 +418,7 @@ with tabs[0]:
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
-            <div class="kpi-label">Total Cash Withdrawn</div>
+            <div class="kpi-label">Total Cash Disbursed</div>
             <div class="kpi-value">{curr_symbol}{total_vol:,.0f}</div>
             <span class="kpi-badge-neutral">Historical Dataset</span>
         </div>
@@ -227,14 +428,14 @@ with tabs[0]:
             <span class="kpi-badge-positive">Daily Velocity</span>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Peak Daily Surge</div>
+            <div class="kpi-label">Peak Daily Volume</div>
             <div class="kpi-value">{curr_symbol}{max_daily:,.0f}</div>
-            <span class="kpi-badge-neutral">Maximum Volume</span>
+            <span class="kpi-badge-neutral">Single Day High</span>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Demand Volatility (CV)</div>
             <div class="kpi-value">{volatility:.1f}%</div>
-            <span class="kpi-badge-positive">Predictability Ratio</span>
+            <span class="kpi-badge-positive">Coefficient of Variation</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -288,9 +489,9 @@ with tabs[0]:
         plt.close(fig_dow)
 
 # ---------------------------------------------------------
-# TAB 2: ML Forecasting Arena
+# TAB 3: ML Forecasting Arena
 # ---------------------------------------------------------
-with tabs[1]:
+with tabs[2]:
     st.markdown("### 🤖 Multi-Model Machine Learning Arena")
     st.write(f"Benchmarking 6 models evaluated on a strict chronological **{test_horizon}-day holdout test horizon**.")
 
@@ -364,11 +565,11 @@ with tabs[1]:
     plt.close(fig_f)
 
 # ---------------------------------------------------------
-# TAB 3: Multi-Horizon Predictions
+# TAB 4: Multi-Horizon Predictions (Amount & Transactions)
 # ---------------------------------------------------------
-with tabs[2]:
-    st.markdown("### 🔮 Multi-Horizon Demand Predictions & Detailed Forecast Table")
-    st.write(f"Day-by-day cash demand forecasts for the upcoming **{test_horizon}-day** window with prediction uncertainty.")
+with tabs[3]:
+    st.markdown("### 🔮 Multi-Horizon Demand & Transaction Predictions")
+    st.write(f"Day-by-day cash amount and transaction volume forecasts for the upcoming **{test_horizon}-day** window.")
 
     top_model = df_metrics.iloc[0]["Model"]
     selected_pred_model = st.selectbox("Select Model for Forecast Output", [c for c in df_preds.columns if c != "Actual"], index=0)
@@ -376,54 +577,65 @@ with tabs[2]:
     preds_selected = df_preds[selected_pred_model]
     std_err = float(df_metrics[df_metrics["Model"] == selected_pred_model]["RMSE"].iloc[0])
 
+    # Estimated transactions for forecasted values
+    recent_ticket_size = float((df_trans["Cash_Withdrawn"] / np.maximum(1, df_trans["Transaction_Count"])).tail(14).mean())
+    pred_txns = (preds_selected / recent_ticket_size).round().astype(int)
+
     forecast_table = pd.DataFrame({
         "Date": df_preds.index.strftime('%a, %b %d, %Y'),
-        "Predicted Demand": preds_selected.values.round(2),
-        f"Lower Bound ({ci_level})": np.maximum(0, preds_selected.values - z_val * std_err).round(2),
-        f"Upper Bound ({ci_level})": (preds_selected.values + z_val * std_err).round(2),
-        "Actual Demand": df_preds["Actual"].values.round(2),
+        "Predicted Amount": preds_selected.values.round(2),
+        "Predicted Transactions": pred_txns.values,
+        f"Amount Lower ({ci_level})": np.maximum(0, preds_selected.values - z_val * std_err).round(2),
+        f"Amount Upper ({ci_level})": (preds_selected.values + z_val * std_err).round(2),
+        "Actual Amount": df_preds["Actual"].values.round(2),
         "Absolute Error": np.abs(df_preds["Actual"].values - preds_selected.values).round(2)
     })
 
-    # Summary metric cards for forecasted window
     total_forecasted = preds_selected.sum()
     total_actual = df_preds["Actual"].sum()
+    total_pred_txns = pred_txns.sum()
     window_wape = (np.abs(df_preds["Actual"].values - preds_selected.values).sum() / total_actual) * 100.0
 
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
-            <div class="kpi-label">Total Projected Window Demand</div>
+            <div class="kpi-label">Projected Total Amount</div>
             <div class="kpi-value">{curr_symbol}{total_forecasted:,.0f}</div>
-            <span class="kpi-badge-neutral">{test_horizon}-Day Total</span>
+            <span class="kpi-badge-neutral">{test_horizon}-Day Cash Volume</span>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Total Actual Ground Truth</div>
-            <div class="kpi-value">{curr_symbol}{total_actual:,.0f}</div>
-            <span class="kpi-badge-positive">Holdout Target</span>
+            <div class="kpi-label">Projected Transactions</div>
+            <div class="kpi-value">{total_pred_txns:,.0f}</div>
+            <span class="kpi-badge-positive">Expected Swipes / Visits</span>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Window WAPE Error</div>
+            <div class="kpi-label">Avg Ticket Size</div>
+            <div class="kpi-value">{curr_symbol}{recent_ticket_size:,.0f}</div>
+            <span class="kpi-badge-neutral">Per Transaction</span>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Forecast WAPE Error</div>
             <div class="kpi-value">{window_wape:.2f}%</div>
-            <span class="kpi-badge-positive">High Accuracy</span>
+            <span class="kpi-badge-positive">Accuracy Metric</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.dataframe(forecast_table.style.format({
-        "Predicted Demand": "{:,.2f}",
-        f"Lower Bound ({ci_level})": "{:,.2f}",
-        f"Upper Bound ({ci_level})": "{:,.2f}",
-        "Actual Demand": "{:,.2f}",
-        "Absolute Error": "{:,.2f}"
+        "Predicted Amount": f"{curr_symbol}" + "{:,.2f}",
+        "Predicted Transactions": "{:,.0f}",
+        f"Amount Lower ({ci_level})": f"{curr_symbol}" + "{:,.2f}",
+        f"Amount Upper ({ci_level})": f"{curr_symbol}" + "{:,.2f}",
+        "Actual Amount": f"{curr_symbol}" + "{:,.2f}",
+        "Absolute Error": f"{curr_symbol}" + "{:,.2f}"
     }), use_container_width=True)
 
 # ---------------------------------------------------------
-# TAB 4: Demand Surge & Scenario Simulator
+# TAB 5: Demand Surge & Scenario Simulator
 # ---------------------------------------------------------
-with tabs[3]:
+with tabs[4]:
     st.markdown("### 🌪️ Demand Surge & Scenario Stress Testing")
-    st.write("Simulate the impact of external events like festival spikes, salary week surges, or regional economic shocks on cash withdrawal demand.")
+    st.write("Simulate the impact of external events like festival spikes or holiday weekends on cash withdrawal amounts and transaction frequency.")
 
     col_s1, col_s2 = st.columns(2)
     with col_s1:
@@ -432,11 +644,9 @@ with tabs[3]:
         weekend_boost = st.slider("Additional Weekend Surge Spike (%)", 0, 50, 15, 5)
 
     base_forecast = df_preds[top_model].copy()
-    
-    # Apply scenario multipliers
     scenario_forecast = base_forecast * (1.0 + shock_pct / 100.0)
     for d in scenario_forecast.index:
-        if d.weekday() >= 5: # Saturday or Sunday
+        if d.weekday() >= 5:
             scenario_forecast[d] *= (1.0 + weekend_boost / 100.0)
 
     st.markdown("#### 📊 Baseline vs. Scenario Demand Comparison")
@@ -460,15 +670,15 @@ with tabs[3]:
 
     st.markdown(f"""
     **Scenario Findings:**
-    - Baseline Projected Demand: **{curr_symbol}{base_forecast.sum():,.0f}**
-    - Scenario Stressed Demand: **{curr_symbol}{scenario_forecast.sum():,.0f}**
+    - Baseline Projected Amount: **{curr_symbol}{base_forecast.sum():,.0f}**
+    - Scenario Stressed Amount: **{curr_symbol}{scenario_forecast.sum():,.0f}**
     - Net Additional Cash Required: **{curr_symbol}{(scenario_forecast.sum() - base_forecast.sum()):,.0f} (+{((scenario_forecast.sum() - base_forecast.sum()) / base_forecast.sum() * 100):.1f}%)**
     """)
 
 # ---------------------------------------------------------
-# TAB 5: Feature Importance & Explainability
+# TAB 6: Feature Importance & Explainability
 # ---------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     st.markdown("### 🧠 Machine Learning Feature Importance & Demand Drivers")
     st.write("Understanding the predictive factors that drive daily ATM cash withdrawal behavior.")
 
